@@ -1,0 +1,16 @@
+# MCP Server
+fastmcp>=2.0.0
+
+# REST API
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.0.0
+
+# Browser Automation
+playwright>=1.40.0
+
+# Configuration
+python-dotenv>=1.0.0
+
+# Logging (built-in, but listing for clarity)
+# logging - part of Python standard library
