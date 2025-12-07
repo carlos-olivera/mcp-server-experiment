@@ -265,6 +265,83 @@ class PlaywrightTwitterRepository(ITwitterRepository):
                 error_code="POST_FAILED"
             )
 
+    async def quote_tweet(self, tweet_id: str, text: str) -> ReplyResult:
+        """
+        Quote tweet (retweet with comment).
+
+        This implementation:
+        1. Navigates to the original tweet
+        2. Clicks the retweet button
+        3. Selects "Quote" option
+        4. Types the comment text
+        5. Posts the quote tweet
+        """
+        logger.info(f"Quote tweeting {tweet_id}")
+
+        page = self.browser_manager.get_page()
+
+        try:
+            # Navigate to the tweet
+            tweet_url = f"{config.TWITTER_BASE_URL}/i/status/{tweet_id}"
+            logger.debug(f"Navigating to {tweet_url}")
+            await page.goto(tweet_url, wait_until="domcontentloaded", timeout=self._timeout)
+            await asyncio.sleep(2)
+
+            # Find and click the retweet button
+            # Twitter uses data-testid="retweet" for the retweet button
+            retweet_button = page.locator('[data-testid="retweet"]').first
+            await retweet_button.click(timeout=5000)
+            logger.debug("Clicked retweet button")
+
+            await asyncio.sleep(0.5)
+
+            # Click the "Quote" option from the menu
+            # Twitter shows a menu with "Retweet" and "Quote" options
+            quote_option = page.locator('[data-testid="Dropdown"] [role="menuitem"]').filter(has_text="Quote").first
+            await quote_option.click(timeout=5000)
+            logger.debug("Clicked quote option")
+
+            await asyncio.sleep(1)
+
+            # Find the quote tweet composer
+            # After clicking quote, a compose dialog appears with the quoted tweet embedded
+            composer = page.locator('[data-testid="tweetTextarea_0"]').first
+            await composer.click(timeout=5000)
+            await composer.fill(text)
+            logger.debug("Filled quote text")
+
+            await asyncio.sleep(0.5)
+
+            # Click the post button
+            post_button = page.locator('[data-testid="tweetButton"]').first
+            await post_button.click(timeout=5000)
+            logger.debug("Clicked post button")
+
+            # Wait for quote tweet to be posted
+            await asyncio.sleep(2)
+
+            logger.info(f"Successfully quote tweeted {tweet_id}")
+
+            return ReplyResult(
+                success=True,
+                message=f"Successfully quote tweeted {tweet_id}",
+                original_tweet_id=tweet_id,
+                data={"quote_text": text}
+            )
+
+        except PlaywrightTimeoutError as e:
+            logger.error(f"Timeout quote tweeting {tweet_id}: {e}")
+            raise TwitterRepositoryError(
+                f"Timeout quote tweeting {tweet_id}",
+                error_code="TIMEOUT"
+            )
+        except Exception as e:
+            logger.error(f"Error quote tweeting {tweet_id}: {e}")
+            raise TwitterRepositoryError(
+                f"Failed to quote tweet {tweet_id}: {str(e)}",
+                error_code="QUOTE_FAILED"
+            )
+
     async def read_last_mentions(self, count: int) -> List[Tweet]:
         """
         Read the last N mentions of the authenticated account.

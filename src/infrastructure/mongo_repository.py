@@ -44,7 +44,12 @@ class MongoRepository:
         self.actions: AsyncIOMotorCollection = self.db.actions
 
     async def initialize(self) -> None:
-        """Create indexes for optimal query performance."""
+        """
+        Create indexes for optimal query performance.
+
+        If the user lacks permissions, logs a warning but continues.
+        Indexes can be created manually by a database administrator.
+        """
         logger.info("Initializing MongoDB indexes")
 
         try:
@@ -72,8 +77,31 @@ class MongoRepository:
             logger.info("MongoDB indexes created successfully")
 
         except Exception as e:
-            logger.error(f"Error creating MongoDB indexes: {e}")
-            raise
+            # Check if it's an authorization/permission error
+            error_msg = str(e).lower()
+            if "not authorized" in error_msg or "unauthorized" in error_msg:
+                logger.warning(
+                    f"MongoDB user lacks permission to create indexes. "
+                    f"Application will continue but performance may be degraded. "
+                    f"Contact your database administrator to create indexes manually using create_mongodb_indexes.js. "
+                    f"Error: {e}"
+                )
+                # Don't raise - continue without indexes
+            elif "authentication failed" in error_msg or "authenticationfailed" in error_msg:
+                logger.error(
+                    f"MongoDB authentication failed. Please check your credentials in .env file:\n"
+                    f"  MONGO_USER={config.MONGO_USER}\n"
+                    f"  MONGO_HOST={config.MONGO_HOST}\n"
+                    f"  MONGO_PORT={config.MONGO_PORT}\n"
+                    f"  MONGO_DB={config.MONGO_DB}\n"
+                    f"  MONGO_AUTH_SOURCE={config.MONGO_AUTH_SOURCE}\n"
+                    f"Error: {e}"
+                )
+                raise
+            else:
+                # For other errors, log and raise
+                logger.error(f"Error creating MongoDB indexes: {e}")
+                raise
 
     async def close(self) -> None:
         """Close MongoDB connection."""
@@ -291,10 +319,27 @@ class MongoRepository:
 
         return self._doc_to_mention(doc)
 
+    async def get_mention_by_twitter_id(self, tweet_id: str) -> Optional[Mention]:
+        """
+        Retrieve mention by Twitter's tweet ID.
+
+        Args:
+            tweet_id: Twitter's tweet ID
+
+        Returns:
+            Mention if found, None otherwise
+        """
+        doc = await self.mentions.find_one({"tweetId": tweet_id})
+        if not doc:
+            return None
+
+        return self._doc_to_mention(doc)
+
     async def get_unanswered_mentions(
         self,
         limit: int = 5,
-        apply_abuse_filter: bool = True
+        apply_abuse_filter: bool = True,
+        username: Optional[str] = None
     ) -> List[Mention]:
         """
         Get unanswered mentions with abuse prevention.
@@ -302,6 +347,7 @@ class MongoRepository:
         Args:
             limit: Maximum number of mentions to return
             apply_abuse_filter: Whether to apply duplicate user filtering
+            username: Optional filter to get mentions only from this specific user
 
         Returns:
             List of Mention objects
@@ -309,21 +355,33 @@ class MongoRepository:
         # Get blocked users
         blocked_usernames = await self.get_blocked_usernames()
 
-        # Query for unanswered, non-ignored mentions from non-blocked users
-        # Get more than needed to allow for filtering
-        buffer_limit = limit * 3  # Get 3x to have room for filtering
-
-        cursor = self.mentions.find({
+        # Build query
+        query = {
             "repliedTo": False,
             "ignored": False,
             "authorUsername": {"$nin": blocked_usernames}
-        }).sort("firstSeenAt", -1).limit(buffer_limit)
+        }
+
+        # Add username filter if specified
+        if username:
+            # Override the $nin to specifically match this username
+            # But still check if user is blocked
+            if username in blocked_usernames:
+                logger.warning(f"Requested user @{username} is blocked, returning empty list")
+                return []
+            query["authorUsername"] = username
+
+        # Get more than needed to allow for filtering (unless filtering by specific user)
+        buffer_limit = limit if username else (limit * 3)  # Get 3x to have room for filtering
+
+        cursor = self.mentions.find(query).sort("firstSeenAt", -1).limit(buffer_limit)
 
         all_mentions = []
         async for doc in cursor:
             all_mentions.append(self._doc_to_mention(doc))
 
-        if not apply_abuse_filter:
+        # If filtering by specific username, skip abuse filter (all are from same user)
+        if username or not apply_abuse_filter:
             return all_mentions[:limit]
 
         # Apply abuse prevention: max 1 mention per user in result set
@@ -335,15 +393,15 @@ class MongoRepository:
             if len(filtered_mentions) >= limit:
                 break
 
-            username = mention.author_username
+            mention_username = mention.author_username
 
-            if username not in seen_users:
+            if mention_username not in seen_users:
                 # First mention from this user - include it
                 filtered_mentions.append(mention)
-                seen_users.add(username)
+                seen_users.add(mention_username)
             else:
                 # Duplicate from same user - mark for ignoring
-                mentions_to_ignore.append((mention.id_tweet, username))
+                mentions_to_ignore.append((mention.id_tweet, mention_username))
 
         # Mark duplicates as ignored
         for id_tweet, username in mentions_to_ignore:

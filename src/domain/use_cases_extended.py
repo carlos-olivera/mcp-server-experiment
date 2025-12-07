@@ -30,7 +30,7 @@ class GetUnansweredMentionsUseCase:
         self.twitter_repo = twitter_repo
         self.mongo_repo = mongo_repo
 
-    async def execute(self, count: int = 5) -> List[Mention]:
+    async def execute(self, count: int = 5, username: str = None) -> List[Mention]:
         """
         Get unanswered mentions with abuse prevention.
 
@@ -42,6 +42,7 @@ class GetUnansweredMentionsUseCase:
 
         Args:
             count: Number of unanswered mentions to return
+            username: Optional filter to get mentions only from this specific user
 
         Returns:
             List of Mention objects (with idTweet)
@@ -49,7 +50,10 @@ class GetUnansweredMentionsUseCase:
         Raises:
             TwitterRepositoryError: If Twitter scraping fails
         """
-        logger.info(f"Getting {count} unanswered mentions")
+        if username:
+            logger.info(f"Getting {count} unanswered mentions from @{username}")
+        else:
+            logger.info(f"Getting {count} unanswered mentions")
 
         # Step 1: Fetch mentions from Twitter (get more to account for filtering)
         buffer_count = count * 2
@@ -81,7 +85,8 @@ class GetUnansweredMentionsUseCase:
         # Step 3: Get unanswered mentions with abuse filtering
         mentions = await self.mongo_repo.get_unanswered_mentions(
             limit=count,
-            apply_abuse_filter=True
+            apply_abuse_filter=True,
+            username=username
         )
 
         logger.info(f"Returning {len(mentions)} unanswered mentions")
@@ -165,19 +170,20 @@ class ReplyByIdTweetUseCase:
         self.twitter_repo = twitter_repo
         self.mongo_repo = mongo_repo
 
-    async def execute(self, id_tweet: str, text: str) -> ReplyResult:
+    async def execute(self, id_tweet: str, text: str, quoted: bool = False) -> ReplyResult:
         """
         Reply to a tweet using its internal MongoDB ID.
 
         Flow:
         1. Get tweet/mention from MongoDB by idTweet
-        2. Reply to the tweet on Twitter using tweetId
+        2. Reply to the tweet on Twitter using tweetId (or quote tweet if quoted=True)
         3. Mark as replied in MongoDB
         4. Log the action
 
         Args:
             id_tweet: Internal MongoDB UUID
             text: Reply text
+            quoted: If True, post as quote tweet instead of reply
 
         Returns:
             ReplyResult with success status
@@ -186,7 +192,8 @@ class ReplyByIdTweetUseCase:
             ValueError: If id_tweet not found
             TwitterRepositoryError: If reply fails
         """
-        logger.info(f"Replying to idTweet={id_tweet}")
+        action_type = "quote_tweet" if quoted else "reply"
+        logger.info(f"{'Quote tweeting' if quoted else 'Replying to'} idTweet={id_tweet}")
 
         # Step 1: Get the tweet/mention from MongoDB
         # Try mentions first, then tweets
@@ -208,19 +215,26 @@ class ReplyByIdTweetUseCase:
                 error_code="ALREADY_REPLIED"
             )
 
-        # Step 2: Reply on Twitter
+        # Step 2: Reply or quote tweet on Twitter
         try:
-            result = await self.twitter_repo.reply_to_tweet(
-                stored_item.tweet_id,
-                text
-            )
-            logger.info(f"Successfully replied to tweet {stored_item.tweet_id}")
+            if quoted:
+                result = await self.twitter_repo.quote_tweet(
+                    stored_item.tweet_id,
+                    text
+                )
+                logger.info(f"Successfully quote tweeted {stored_item.tweet_id}")
+            else:
+                result = await self.twitter_repo.reply_to_tweet(
+                    stored_item.tweet_id,
+                    text
+                )
+                logger.info(f"Successfully replied to tweet {stored_item.tweet_id}")
         except TwitterRepositoryError as e:
-            logger.error(f"Failed to reply to tweet: {e.message}")
+            logger.error(f"Failed to {action_type} tweet: {e.message}")
 
             # Log failed action
             action = Action(
-                action_type="reply",
+                action_type=action_type,
                 performed_at=datetime.utcnow(),
                 success=False,
                 target_tweet_id=stored_item.tweet_id,
@@ -243,22 +257,26 @@ class ReplyByIdTweetUseCase:
 
         # Step 4: Log successful action
         action = Action(
-            action_type="reply",
+            action_type=action_type,
             performed_at=datetime.utcnow(),
             success=True,
             target_tweet_id=stored_item.tweet_id,
             target_id_tweet=id_tweet,
             target_username=stored_item.author_username,
             result_tweet_id=reply_tweet_id,
-            metadata={"reply_text": text}
+            metadata={
+                "text": text,
+                "quoted": quoted
+            }
         )
         await self.mongo_repo.log_action(action)
 
         # Return result with internal IDs
+        action_verb = "quote tweeted" if quoted else "replied to"
         return ReplyResult(
             success=True,
-            message=f"Successfully replied to tweet {id_tweet}",
+            message=f"Successfully {action_verb} tweet {id_tweet}",
             original_tweet_id=stored_item.tweet_id,
             reply_tweet_id=reply_tweet_id,
-            data={"idTweet": id_tweet}
+            data={"idTweet": id_tweet, "quoted": quoted}
         )

@@ -58,9 +58,9 @@ async def lifespan(app: FastAPI):
         twitter_repo = PlaywrightTwitterRepository(browser_manager)
         logger.info("Twitter repository initialized")
 
-        # Initialize original use cases (without MongoDB)
+        # Initialize original use cases (now with optional MongoDB support)
         read_tweets_uc = ReadLastTweetsUseCase(twitter_repo)
-        reply_uc = ReplyToTweetUseCase(twitter_repo)
+        reply_uc = ReplyToTweetUseCase(twitter_repo, mongo_repo)  # Now with MongoDB
         retweet_uc = RetweetUseCase(twitter_repo)
         post_tweet_uc = PostTweetUseCase(twitter_repo)
 

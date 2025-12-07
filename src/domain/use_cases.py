@@ -1,9 +1,10 @@
 """Domain use cases - orchestrate business logic without framework dependencies."""
 
 import logging
-from typing import List
+from typing import List, Optional
+from datetime import datetime
 from src.domain.interfaces import ITwitterRepository, TwitterRepositoryError
-from src.domain.models import Tweet, ActionResult, TweetPostResult, ReplyResult
+from src.domain.models import Tweet, ActionResult, TweetPostResult, ReplyResult, Action
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,9 @@ class ReadLastTweetsUseCase:
 class ReplyToTweetUseCase:
     """Use case for replying to a tweet."""
 
-    def __init__(self, twitter_repo: ITwitterRepository):
+    def __init__(self, twitter_repo: ITwitterRepository, mongo_repo=None):
         self.twitter_repo = twitter_repo
+        self.mongo_repo = mongo_repo  # Optional MongoDB repository
 
     async def execute(self, tweet_id: str, text: str) -> ReplyResult:
         """
@@ -74,10 +76,93 @@ class ReplyToTweetUseCase:
         try:
             result = await self.twitter_repo.reply_to_tweet(tweet_id, text)
             logger.info(f"Successfully replied to tweet {tweet_id}")
+
+            # If MongoDB is available, mark the tweet/mention as replied
+            if self.mongo_repo:
+                await self._mark_as_replied_in_mongodb(tweet_id, result.reply_tweet_id or "unknown", text)
+
             return result
         except TwitterRepositoryError as e:
             logger.error(f"Failed to reply to tweet {tweet_id}: {e.message}")
+
+            # Log failed action if MongoDB is available
+            if self.mongo_repo:
+                await self._log_failed_reply(tweet_id, text, e.message)
+
             raise
+
+    async def _mark_as_replied_in_mongodb(self, tweet_id: str, reply_tweet_id: str, reply_text: str):
+        """Mark tweet/mention as replied in MongoDB if it exists."""
+        try:
+            # Try to find by tweetId in mentions collection
+            mention = await self.mongo_repo.get_mention_by_twitter_id(tweet_id)
+            if mention:
+                await self.mongo_repo.mark_mention_as_replied(mention.id_tweet, reply_tweet_id)
+                logger.info(f"Marked mention {tweet_id} as replied in MongoDB")
+
+                # Log successful action
+                action = Action(
+                    action_type="reply",
+                    performed_at=datetime.utcnow(),
+                    success=True,
+                    target_tweet_id=tweet_id,
+                    target_id_tweet=mention.id_tweet,
+                    target_username=mention.author_username,
+                    result_tweet_id=reply_tweet_id,
+                    metadata={"reply_text": reply_text}
+                )
+                await self.mongo_repo.log_action(action)
+                return
+
+            # Try to find in tweets collection
+            tweet = await self.mongo_repo.get_tweet_by_twitter_id(tweet_id)
+            if tweet:
+                await self.mongo_repo.mark_tweet_as_replied(tweet.id_tweet, reply_tweet_id)
+                logger.info(f"Marked tweet {tweet_id} as replied in MongoDB")
+
+                # Log successful action
+                action = Action(
+                    action_type="reply",
+                    performed_at=datetime.utcnow(),
+                    success=True,
+                    target_tweet_id=tweet_id,
+                    target_id_tweet=tweet.id_tweet,
+                    target_username=tweet.author_username,
+                    result_tweet_id=reply_tweet_id,
+                    metadata={"reply_text": reply_text}
+                )
+                await self.mongo_repo.log_action(action)
+                return
+
+            logger.info(f"Tweet {tweet_id} not found in MongoDB, skipping mark as replied")
+
+        except Exception as e:
+            logger.error(f"Failed to mark tweet {tweet_id} as replied in MongoDB: {e}")
+            # Don't raise - MongoDB marking is optional
+
+    async def _log_failed_reply(self, tweet_id: str, reply_text: str, error_message: str):
+        """Log failed reply action to MongoDB."""
+        try:
+            # Try to get tweet info for logging
+            mention = await self.mongo_repo.get_mention_by_twitter_id(tweet_id)
+            if not mention:
+                tweet = await self.mongo_repo.get_tweet_by_twitter_id(tweet_id)
+                if tweet:
+                    mention = tweet
+
+            action = Action(
+                action_type="reply",
+                performed_at=datetime.utcnow(),
+                success=False,
+                target_tweet_id=tweet_id,
+                target_id_tweet=mention.id_tweet if mention else None,
+                target_username=mention.author_username if mention else "unknown",
+                error_message=error_message,
+                metadata={"reply_text": reply_text}
+            )
+            await self.mongo_repo.log_action(action)
+        except Exception as e:
+            logger.error(f"Failed to log action to MongoDB: {e}")
 
 
 class RetweetUseCase:

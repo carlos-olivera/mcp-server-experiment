@@ -75,6 +75,23 @@ class ITwitterRepository(ABC):
         pass
 
     @abstractmethod
+    async def quote_tweet(self, tweet_id: str, text: str) -> ReplyResult:
+        """
+        Quote tweet (retweet with comment).
+
+        Args:
+            tweet_id: The ID of the tweet to quote
+            text: The comment text
+
+        Returns:
+            ReplyResult with success status and metadata
+
+        Raises:
+            TwitterRepositoryError: If operation fails
+        """
+        pass
+
+    @abstractmethod
     async def read_last_mentions(self, count: int) -> List[Tweet]:
         """
         Read the last N mentions of the authenticated account.

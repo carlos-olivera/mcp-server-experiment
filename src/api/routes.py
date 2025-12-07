@@ -300,18 +300,22 @@ async def health_check():
 # New MongoDB-backed endpoints
 
 @router.get("/mentions/unanswered", response_model=UnansweredMentionsResponse)
-async def get_unanswered_mentions(count: int = Query(5, ge=1, le=50)):
+async def get_unanswered_mentions(
+    count: int = Query(5, ge=1, le=50),
+    username: str = Query(None, description="Optional: filter mentions from specific user")
+):
     """
     Get unanswered mentions with abuse prevention.
 
     This endpoint:
     - Fetches recent mentions from Twitter
     - Stores them in MongoDB
-    - Returns unanswered mentions (max 1 per user per batch)
+    - Returns unanswered mentions (max 1 per user per batch, unless filtering by username)
     - Auto-blocks users with 10+ ignored mentions
 
     Args:
         count: Number of unanswered mentions to return (1-50)
+        username: Optional filter to get mentions only from this specific user
 
     Returns:
         UnansweredMentionsResponse with list of mentions
@@ -319,10 +323,14 @@ async def get_unanswered_mentions(count: int = Query(5, ge=1, le=50)):
     Raises:
         HTTPException: If operation fails
     """
-    logger.info(f"API request: get {count} unanswered mentions")
+    if username:
+        username = username.lstrip('@')
+        logger.info(f"API request: get {count} unanswered mentions from @{username}")
+    else:
+        logger.info(f"API request: get {count} unanswered mentions")
 
     try:
-        mentions = await _get_unanswered_mentions_use_case.execute(count)
+        mentions = await _get_unanswered_mentions_use_case.execute(count, username)
 
         # Convert to API format
         mentions_data = [m.to_api_dict() for m in mentions]
@@ -330,7 +338,8 @@ async def get_unanswered_mentions(count: int = Query(5, ge=1, le=50)):
         return UnansweredMentionsResponse(
             success=True,
             mentions=mentions_data,
-            count=len(mentions_data)
+            count=len(mentions_data),
+            username=username
         )
 
     except TwitterRepositoryError as e:
@@ -420,12 +429,12 @@ async def reply_by_id_tweet(request: ReplyByIdRequest):
 
     This endpoint:
     - Looks up the tweet/mention by idTweet in MongoDB
-    - Posts a reply on Twitter
+    - Posts a reply or quote tweet on Twitter (based on quoted parameter)
     - Marks the tweet as replied in MongoDB
     - Logs the action
 
     Args:
-        request: ReplyByIdRequest with idTweet and text
+        request: ReplyByIdRequest with idTweet, text, and optional quoted flag
 
     Returns:
         ActionResponse with success status
@@ -433,10 +442,15 @@ async def reply_by_id_tweet(request: ReplyByIdRequest):
     Raises:
         HTTPException: If operation fails or tweet not found
     """
-    logger.info(f"API request: reply to idTweet={request.idTweet}")
+    action_type = "quote tweet" if request.quoted else "reply"
+    logger.info(f"API request: {action_type} to idTweet={request.idTweet}")
 
     try:
-        result = await _reply_by_id_use_case.execute(request.idTweet, request.text)
+        result = await _reply_by_id_use_case.execute(
+            request.idTweet,
+            request.text,
+            quoted=request.quoted
+        )
 
         return ActionResponse(
             success=result.success,

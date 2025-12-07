@@ -63,9 +63,14 @@ INFO - REST API startup complete
 
 ### 1. Get Unanswered Mentions
 
-**Request:**
+**Request (all mentions):**
 ```bash
 curl "http://localhost:8000/api/v1/mentions/unanswered?count=5"
+```
+
+**Request (from specific user):**
+```bash
+curl "http://localhost:8000/api/v1/mentions/unanswered?count=10&username=alice123"
 ```
 
 **Response:**
@@ -86,15 +91,21 @@ curl "http://localhost:8000/api/v1/mentions/unanswered?count=5"
       "mentionedUsers": ["@mybot"]
     }
   ],
-  "count": 1
+  "count": 1,
+  "username": null
 }
 ```
+
+**Query Parameters:**
+- `count`: Number of mentions to return (1-50, default: 5)
+- `username`: Optional filter to get mentions only from specific user (e.g., `alice123`)
 
 **Features:**
 - Fetches recent mentions from Twitter
 - Stores in MongoDB with unique `idTweet`
-- Filters duplicates (max 1 per user per batch)
+- Filters duplicates (max 1 per user per batch, unless filtering by username)
 - Auto-ignores extras and blocks abusive users
+- Can filter to show all mentions from a specific user
 
 ### 2. Get Unanswered Tweets from User
 
@@ -127,13 +138,25 @@ curl "http://localhost:8000/api/v1/tweets/unanswered/elonmusk?count=5"
 
 ### 3. Reply by Internal ID
 
-**Request:**
+**Request (Regular Reply):**
 ```bash
 curl -X POST "http://localhost:8000/api/v1/reply_by_id" \
   -H "Content-Type: application/json" \
   -d '{
     "idTweet": "550e8400-e29b-41d4-a716-446655440000",
-    "text": "Thanks for reaching out!"
+    "text": "Thanks for reaching out!",
+    "quoted": false
+  }'
+```
+
+**Request (Quote Tweet):**
+```bash
+curl -X POST "http://localhost:8000/api/v1/reply_by_id" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "idTweet": "550e8400-e29b-41d4-a716-446655440000",
+    "text": "Great insight! Sharing this with my followers.",
+    "quoted": true
   }'
 ```
 
@@ -145,16 +168,28 @@ curl -X POST "http://localhost:8000/api/v1/reply_by_id" \
   "data": {
     "original_tweet_id": "1234567890",
     "reply_tweet_id": "1234567892",
-    "idTweet": "550e8400-e29b-41d4-a716-446655440000"
+    "idTweet": "550e8400-e29b-41d4-a716-446655440000",
+    "quoted": false
   }
 }
 ```
 
+**Parameters:**
+- `idTweet`: Internal MongoDB UUID
+- `text`: Reply/comment text (max 280 characters)
+- `quoted`: (Optional) If `true`, post as quote tweet; if `false` or omitted, post as regular reply
+
+**Quote Tweet vs Reply:**
+- **Reply** (`quoted: false`): Threaded reply under the original tweet
+- **Quote Tweet** (`quoted: true`): Your tweet with the original embedded, appears on your timeline
+
 **What happens:**
 1. Looks up tweet in MongoDB by `idTweet`
-2. Posts reply on Twitter
+2. Posts reply or quote tweet on Twitter
 3. Marks as replied in MongoDB
-4. Logs action in audit trail
+4. Logs action in audit trail (as "reply" or "quote_tweet")
+
+**See also:** [QUOTE_TWEET_FEATURE.md](QUOTE_TWEET_FEATURE.md) for detailed documentation
 
 ### 4. Post Tweet (Enhanced)
 
@@ -229,6 +264,24 @@ curl -X POST "http://localhost:8000/api/v1/reply_by_id" \
   }"
 ```
 
+### Responding to Mentions from Specific User
+
+```bash
+# Get all unanswered mentions from alice123
+MENTIONS=$(curl -s "http://localhost:8000/api/v1/mentions/unanswered?count=10&username=alice123")
+echo $MENTIONS | jq '.'
+
+# Reply to each mention from alice123
+for id in $(echo $MENTIONS | jq -r '.mentions[].idTweet'); do
+  curl -X POST "http://localhost:8000/api/v1/reply_by_id" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"idTweet\": \"$id\",
+      \"text\": \"Hi Alice! Thanks for reaching out.\"
+    }"
+done
+```
+
 ### Monitoring a User's Tweets
 
 ```bash
@@ -264,6 +317,35 @@ db.actions.find().sort({performedAt: -1}).limit(10).pretty()
 ```
 
 ## Troubleshooting
+
+### MongoDB Permission Issues
+
+**Warning:** `MongoDB user lacks permission to create indexes`
+
+**What it means:**
+- The application user (`criptoUser`) doesn't have permission to create indexes
+- The application will continue to work but may have slower query performance
+- This is a common setup in production environments where app users have limited permissions
+
+**Solution:**
+1. **Option 1 (Recommended):** Contact your database administrator to create indexes manually:
+   ```bash
+   # Run as admin user with proper permissions
+   mongo mongodb://adminUser:adminPass@192.168.50.139:27017/xserver?authSource=admin create_mongodb_indexes.js
+   ```
+
+2. **Option 2:** Grant index creation permissions to `criptoUser`:
+   ```javascript
+   // As database administrator
+   use admin
+   db.grantRolesToUser("criptoUser", [
+     { role: "dbOwner", db: "xserver" }
+   ])
+   ```
+
+3. **Option 3:** Continue without indexes (acceptable for development/testing)
+   - The application will work correctly
+   - Performance may be slower with large datasets
 
 ### MongoDB Connection Issues
 

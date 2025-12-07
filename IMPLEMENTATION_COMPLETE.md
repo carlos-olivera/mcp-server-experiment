@@ -31,17 +31,21 @@ The Twitter MCP Agent now includes full MongoDB integration, abuse prevention, a
 
 ### 4. New Use Cases
 - **Extended use cases** ([src/domain/use_cases_extended.py](src/domain/use_cases_extended.py))
-  - `GetUnansweredMentionsUseCase` - With abuse prevention
+  - `GetUnansweredMentionsUseCase` - With abuse prevention and optional username filtering
   - `GetUnansweredTweetsFromUserUseCase` - MongoDB-filtered tweets
   - `ReplyByIdTweetUseCase` - Reply using internal MongoDB ID
 
 ### 5. New API Endpoints
-- **GET /api/v1/mentions/unanswered** - Get unanswered mentions
+- **GET /api/v1/mentions/unanswered** - Get unanswered mentions (supports optional `username` filter)
+  - Query params: `count` (1-50), `username` (optional)
+  - Examples:
+    - All mentions: `?count=5`
+    - From specific user: `?count=10&username=alice123`
 - **GET /api/v1/tweets/unanswered/{username}** - Get unanswered tweets from user
 - **POST /api/v1/reply_by_id** - Reply using internal `idTweet`
 
 ### 6. Abuse Prevention
-- **Duplicate user filtering** - Max 1 mention per user in each batch
+- **Duplicate user filtering** - Max 1 mention per user in each batch (unless filtering by username)
 - **Auto-blocking** - Users with 10+ ignored mentions get blocked
 - **Blocked user exclusion** - Blocked users' mentions never appear
 - **Audit trail** - All actions logged in MongoDB

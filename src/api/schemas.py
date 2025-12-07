@@ -97,11 +97,16 @@ class MentionSchema(StoredTweetSchema):
 
 
 class UnansweredMentionsResponse(BaseModel):
-    """Response schema for unanswered mentions."""
+    """Response schema for unanswered mentions.
+
+    Can be filtered by username using the optional 'username' query parameter.
+    When filtering by username, abuse prevention is skipped (all mentions are from same user).
+    """
 
     success: bool
     mentions: List[Dict[str, Any]]  # Using Dict for flexibility with Mention.to_api_dict()
     count: int
+    username: Optional[str] = None  # Set when filtering by specific user
 
 
 class UnansweredTweetsResponse(BaseModel):
@@ -118,3 +123,4 @@ class ReplyByIdRequest(BaseModel):
 
     idTweet: str = Field(..., description="Internal MongoDB UUID of the tweet", min_length=1)
     text: str = Field(..., description="Reply text", min_length=1, max_length=280)
+    quoted: bool = Field(False, description="If true, post as quote tweet instead of reply")
