@@ -34,6 +34,27 @@ class Config:
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     )
 
+    # MongoDB settings
+    MONGO_USER: str = os.getenv("MONGO_USER", "criptoUser")
+    MONGO_PASSWORD: str = os.getenv("MONGO_PASSWORD", "criptoPass456")
+    MONGO_HOST: str = os.getenv("MONGO_HOST", "192.168.50.139")
+    MONGO_PORT: int = int(os.getenv("MONGO_PORT", "27017"))
+    MONGO_DB: str = os.getenv("MONGO_DB", "xserver")
+    MONGO_AUTH_SOURCE: str = os.getenv("MONGO_AUTH_SOURCE", "admin")
+
+    # Abuse prevention settings
+    MAX_MENTIONS_PER_USER_IN_BATCH: int = int(os.getenv("MAX_MENTIONS_PER_USER_IN_BATCH", "1"))
+    MAX_IGNORED_BEFORE_BLOCK: int = int(os.getenv("MAX_IGNORED_BEFORE_BLOCK", "10"))
+
+    @classmethod
+    def get_mongo_uri(cls) -> str:
+        """Get MongoDB connection URI."""
+        return (
+            f"mongodb://{cls.MONGO_USER}:{cls.MONGO_PASSWORD}@"
+            f"{cls.MONGO_HOST}:{cls.MONGO_PORT}/{cls.MONGO_DB}"
+            f"?authSource={cls.MONGO_AUTH_SOURCE}"
+        )
+
     @classmethod
     def validate(cls) -> None:
         """Validate that required configuration is present."""

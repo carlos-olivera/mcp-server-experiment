@@ -74,6 +74,22 @@ class ITwitterRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    async def read_last_mentions(self, count: int) -> List[Tweet]:
+        """
+        Read the last N mentions of the authenticated account.
+
+        Args:
+            count: Number of mentions to retrieve
+
+        Returns:
+            List of Tweet objects representing mentions
+
+        Raises:
+            TwitterRepositoryError: If operation fails
+        """
+        pass
+
 
 class TwitterRepositoryError(Exception):
     """Base exception for Twitter repository operations."""

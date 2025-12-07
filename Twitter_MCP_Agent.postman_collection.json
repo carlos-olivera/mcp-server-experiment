@@ -1,0 +1,569 @@
+{
+	"info": {
+		"_postman_id": "twitter-mcp-agent-collection",
+		"name": "Twitter MCP Agent API",
+		"description": "Complete API collection for Twitter MCP Agent with MongoDB integration.\n\n## Features\n- Read tweets from any user\n- Get unanswered mentions with abuse prevention\n- Get unanswered tweets from specific users\n- Reply to tweets by ID or internal MongoDB ID\n- Retweet and post tweets\n- Full MongoDB persistence and audit trail\n\n## Base URL\nhttp://localhost:8000\n\n## Authentication\nNo authentication required (uses stored auth.json session)\n\n## MongoDB Collections\n- `tweets` - All regular tweets\n- `mentions` - All mentions with abuse tracking\n- `blocked_users` - Auto-blocked abusive users\n- `actions` - Complete audit trail\n\n## Abuse Prevention\n- Max 1 mention per user per batch\n- Auto-block after 10 ignored mentions\n- Blocked users excluded from results",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "twitter-mcp-agent"
+	},
+	"item": [
+		{
+			"name": "Health & Status",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/health",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "health"]
+						},
+						"description": "Check if the API is running and healthy."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/health",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "health"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"status\": \"healthy\",\n    \"service\": \"twitter-mcp-agent\"\n}"
+						}
+					]
+				}
+			],
+			"description": "Health check and status endpoints"
+		},
+		{
+			"name": "Original Endpoints",
+			"item": [
+				{
+					"name": "Read Tweets from User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"elonmusk\",\n    \"count\": 5\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/read_tweets",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "read_tweets"]
+						},
+						"description": "Read the last N tweets from a user's profile.\n\n**Parameters:**\n- `username`: Twitter username (with or without @)\n- `count`: Number of tweets (1-100)\n\n**Returns:**\n- List of tweets with id, text, author, URL, etc."
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"username\": \"elonmusk\",\n    \"count\": 3\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/read_tweets",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "read_tweets"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"tweets\": [\n        {\n            \"id\": \"1234567890123456789\",\n            \"text\": \"Exciting developments in AI and robotics!\",\n            \"author_username\": \"elonmusk\",\n            \"created_at\": \"2024-12-06T15:30:00\",\n            \"url\": \"https://x.com/elonmusk/status/1234567890123456789\",\n            \"retweet_count\": 1500,\n            \"like_count\": 12000,\n            \"reply_count\": 300\n        },\n        {\n            \"id\": \"1234567890123456788\",\n            \"text\": \"Mars mission update coming soon\",\n            \"author_username\": \"elonmusk\",\n            \"created_at\": \"2024-12-06T14:00:00\",\n            \"url\": \"https://x.com/elonmusk/status/1234567890123456788\"\n        }\n    ],\n    \"count\": 2\n}"
+						}
+					]
+				},
+				{
+					"name": "Reply to Tweet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tweet_id\": \"1234567890123456789\",\n    \"text\": \"Great point! Looking forward to seeing this develop.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/reply",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "reply"]
+						},
+						"description": "Reply to a tweet using Twitter's tweet ID.\n\n**Parameters:**\n- `tweet_id`: Twitter's tweet ID\n- `text`: Reply text (max 280 characters)\n\n**Returns:**\n- Success status and reply metadata"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"tweet_id\": \"1234567890123456789\",\n    \"text\": \"Great point!\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/reply",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "reply"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Successfully replied to tweet 1234567890123456789\",\n    \"data\": {\n        \"original_tweet_id\": \"1234567890123456789\",\n        \"reply_tweet_id\": \"1234567890123456790\",\n        \"reply_url\": \"https://x.com/yourbot/status/1234567890123456790\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Retweet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"tweet_id\": \"1234567890123456789\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/retweet",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "retweet"]
+						},
+						"description": "Retweet (repost) a tweet.\n\n**Parameters:**\n- `tweet_id`: Twitter's tweet ID\n\n**Returns:**\n- Success status"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"tweet_id\": \"1234567890123456789\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/retweet",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "retweet"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Successfully retweeted tweet 1234567890123456789\",\n    \"data\": {\n        \"tweet_id\": \"1234567890123456789\"\n    }\n}"
+						}
+					]
+				},
+				{
+					"name": "Post Tweet",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"text\": \"Hello from Twitter MCP Agent! Testing the API. 🤖\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/post_tweet",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "post_tweet"]
+						},
+						"description": "Post a new tweet.\n\n**Parameters:**\n- `text`: Tweet text (max 280 characters)\n\n**Returns:**\n- Success status and tweet metadata"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"text\": \"Hello World!\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/post_tweet",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "post_tweet"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Successfully posted tweet\",\n    \"data\": {\n        \"tweet_text\": \"Hello World!\"\n    }\n}"
+						}
+					]
+				}
+			],
+			"description": "Original endpoints without MongoDB (still functional)"
+		},
+		{
+			"name": "MongoDB Endpoints",
+			"item": [
+				{
+					"name": "Get Unanswered Mentions",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/mentions/unanswered?count=5",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "mentions", "unanswered"],
+							"query": [
+								{
+									"key": "count",
+									"value": "5",
+									"description": "Number of mentions to return (1-50)"
+								}
+							]
+						},
+						"description": "Get unanswered mentions with abuse prevention.\n\n**Features:**\n- Fetches recent mentions from Twitter\n- Stores in MongoDB with unique `idTweet`\n- Returns max 1 mention per user per batch\n- Auto-blocks users with 10+ ignored mentions\n- Excludes blocked users\n\n**Query Parameters:**\n- `count`: Number of mentions (1-50, default: 5)\n\n**Returns:**\n- List of mentions with MongoDB metadata\n- Each mention includes `idTweet` for later reference"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/mentions/unanswered?count=5",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "mentions", "unanswered"],
+									"query": [
+										{
+											"key": "count",
+											"value": "5"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"mentions\": [\n        {\n            \"idTweet\": \"550e8400-e29b-41d4-a716-446655440000\",\n            \"tweetId\": \"1734567890123456789\",\n            \"text\": \"@mybot Can you help me understand this?\",\n            \"authorUsername\": \"user123\",\n            \"createdAt\": \"2024-12-06T15:45:00\",\n            \"url\": \"https://x.com/user123/status/1734567890123456789\",\n            \"type\": \"mention\",\n            \"repliedTo\": false,\n            \"ignored\": false,\n            \"mentionedUsers\": [\"@mybot\"]\n        },\n        {\n            \"idTweet\": \"550e8400-e29b-41d4-a716-446655440001\",\n            \"tweetId\": \"1734567890123456790\",\n            \"text\": \"@mybot @alice What do you think about this?\",\n            \"authorUsername\": \"bob456\",\n            \"createdAt\": \"2024-12-06T14:30:00\",\n            \"url\": \"https://x.com/bob456/status/1734567890123456790\",\n            \"type\": \"mention\",\n            \"repliedTo\": false,\n            \"ignored\": false,\n            \"mentionedUsers\": [\"@mybot\", \"@alice\"]\n        }\n    ],\n    \"count\": 2\n}"
+						},
+						{
+							"name": "Empty Result",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/mentions/unanswered?count=5",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "mentions", "unanswered"],
+									"query": [
+										{
+											"key": "count",
+											"value": "5"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"mentions\": [],\n    \"count\": 0\n}"
+						}
+					]
+				},
+				{
+					"name": "Get Unanswered Tweets from User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/v1/tweets/unanswered/elonmusk?count=5",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "tweets", "unanswered", "elonmusk"],
+							"query": [
+								{
+									"key": "count",
+									"value": "5",
+									"description": "Number of tweets to return (1-50)"
+								}
+							]
+						},
+						"description": "Get unanswered tweets from a specific user.\n\n**Features:**\n- Fetches recent tweets from user\n- Stores in MongoDB with unique `idTweet`\n- Returns only unanswered tweets\n\n**Path Parameters:**\n- `username`: Twitter username (with or without @)\n\n**Query Parameters:**\n- `count`: Number of tweets (1-50, default: 5)\n\n**Returns:**\n- List of unanswered tweets with MongoDB metadata"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/api/v1/tweets/unanswered/elonmusk?count=3",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "tweets", "unanswered", "elonmusk"],
+									"query": [
+										{
+											"key": "count",
+											"value": "3"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"tweets\": [\n        {\n            \"idTweet\": \"550e8400-e29b-41d4-a716-446655440002\",\n            \"tweetId\": \"1834567890123456789\",\n            \"text\": \"Mars colonization timeline update\",\n            \"authorUsername\": \"elonmusk\",\n            \"createdAt\": \"2024-12-06T16:00:00\",\n            \"url\": \"https://x.com/elonmusk/status/1834567890123456789\",\n            \"type\": \"regular\",\n            \"repliedTo\": false,\n            \"ignored\": false\n        },\n        {\n            \"idTweet\": \"550e8400-e29b-41d4-a716-446655440003\",\n            \"tweetId\": \"1834567890123456788\",\n            \"text\": \"AI safety research progress\",\n            \"authorUsername\": \"elonmusk\",\n            \"createdAt\": \"2024-12-06T14:00:00\",\n            \"url\": \"https://x.com/elonmusk/status/1834567890123456788\",\n            \"type\": \"regular\",\n            \"repliedTo\": false,\n            \"ignored\": false\n        }\n    ],\n    \"count\": 2,\n    \"username\": \"elonmusk\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Reply by Internal ID",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"idTweet\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"text\": \"Thanks for reaching out! Happy to help.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/v1/reply_by_id",
+							"host": ["{{base_url}}"],
+							"path": ["api", "v1", "reply_by_id"]
+						},
+						"description": "Reply to a tweet using its internal MongoDB ID.\n\n**Features:**\n- Look up tweet/mention by `idTweet` in MongoDB\n- Post reply on Twitter\n- Mark as replied in MongoDB\n- Log action in audit trail\n- Prevent duplicate replies\n\n**Body Parameters:**\n- `idTweet`: Internal MongoDB UUID (from previous API calls)\n- `text`: Reply text (max 280 characters)\n\n**Returns:**\n- Success status with both `idTweet` and Twitter's `tweetId`"
+					},
+					"response": [
+						{
+							"name": "Success",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"idTweet\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"text\": \"Thanks for reaching out!\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/reply_by_id",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "reply_by_id"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": true,\n    \"message\": \"Successfully replied to tweet 550e8400-e29b-41d4-a716-446655440000\",\n    \"data\": {\n        \"success\": true,\n        \"message\": \"Successfully replied to tweet 550e8400-e29b-41d4-a716-446655440000\",\n        \"data\": {\n            \"idTweet\": \"550e8400-e29b-41d4-a716-446655440000\"\n        },\n        \"error_code\": null,\n        \"original_tweet_id\": \"1734567890123456789\",\n        \"reply_tweet_id\": \"1734567890123456791\"\n    }\n}"
+						},
+						{
+							"name": "Already Replied",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"idTweet\": \"550e8400-e29b-41d4-a716-446655440000\",\n    \"text\": \"Another reply\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/reply_by_id",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "reply_by_id"]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"success\": false,\n    \"message\": \"Tweet 550e8400-e29b-41d4-a716-446655440000 has already been replied to\",\n    \"data\": {\n        \"success\": false,\n        \"message\": \"Tweet 550e8400-e29b-41d4-a716-446655440000 has already been replied to\",\n        \"data\": null,\n        \"error_code\": \"ALREADY_REPLIED\",\n        \"original_tweet_id\": \"1734567890123456789\",\n        \"reply_tweet_id\": null\n    }\n}"
+						},
+						{
+							"name": "Not Found",
+							"originalRequest": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"idTweet\": \"invalid-id-12345\",\n    \"text\": \"Test reply\"\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/api/v1/reply_by_id",
+									"host": ["{{base_url}}"],
+									"path": ["api", "v1", "reply_by_id"]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"detail\": {\n        \"success\": false,\n        \"error\": \"Tweet not found with idTweet=invalid-id-12345\",\n        \"error_code\": \"NOT_FOUND\"\n    }\n}"
+						}
+					]
+				}
+			],
+			"description": "New MongoDB-backed endpoints with persistence and abuse prevention"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:8000",
+			"type": "string"
+		}
+	]
+}

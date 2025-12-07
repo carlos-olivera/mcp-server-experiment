@@ -72,3 +72,49 @@ class ErrorResponse(BaseModel):
     error: str
     error_code: str
     detail: Optional[str] = None
+
+
+# New schemas for MongoDB-backed endpoints
+
+class StoredTweetSchema(BaseModel):
+    """Schema for a stored tweet with MongoDB metadata."""
+
+    idTweet: str
+    tweetId: str
+    text: str
+    authorUsername: str
+    createdAt: str
+    url: str
+    type: str
+    repliedTo: bool
+    ignored: bool
+
+
+class MentionSchema(StoredTweetSchema):
+    """Schema for a mention (extends StoredTweetSchema)."""
+
+    mentionedUsers: List[str]
+
+
+class UnansweredMentionsResponse(BaseModel):
+    """Response schema for unanswered mentions."""
+
+    success: bool
+    mentions: List[Dict[str, Any]]  # Using Dict for flexibility with Mention.to_api_dict()
+    count: int
+
+
+class UnansweredTweetsResponse(BaseModel):
+    """Response schema for unanswered tweets from a user."""
+
+    success: bool
+    tweets: List[Dict[str, Any]]  # Using Dict for flexibility with StoredTweet.to_api_dict()
+    count: int
+    username: str
+
+
+class ReplyByIdRequest(BaseModel):
+    """Request schema for replying by internal MongoDB ID."""
+
+    idTweet: str = Field(..., description="Internal MongoDB UUID of the tweet", min_length=1)
+    text: str = Field(..., description="Reply text", min_length=1, max_length=280)

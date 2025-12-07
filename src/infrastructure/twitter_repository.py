@@ -265,6 +265,68 @@ class PlaywrightTwitterRepository(ITwitterRepository):
                 error_code="POST_FAILED"
             )
 
+    async def read_last_mentions(self, count: int) -> List[Tweet]:
+        """
+        Read the last N mentions of the authenticated account.
+
+        This implementation:
+        1. Navigates to notifications/mentions
+        2. Waits for mentions to load
+        3. Extracts mention data from the DOM
+        4. Parses mentioned users from tweet text
+
+        Args:
+            count: Number of mentions to retrieve
+
+        Returns:
+            List of Tweet objects representing mentions
+        """
+        logger.info(f"Reading last {count} mentions")
+
+        page = self.browser_manager.get_page()
+        url = f"{config.TWITTER_BASE_URL}/notifications/mentions"
+
+        try:
+            # Navigate to mentions
+            logger.debug(f"Navigating to {url}")
+            await page.goto(url, wait_until="domcontentloaded", timeout=self._timeout)
+
+            # Wait for tweet elements to appear
+            try:
+                await page.wait_for_selector('article[data-testid="tweet"]', timeout=10000)
+                logger.debug("Mention tweets found")
+            except PlaywrightTimeoutError:
+                logger.warning("No mentions found on page")
+                return []
+
+            # Give time for rendering
+            await asyncio.sleep(3)
+
+            # Scroll to trigger loading
+            for _ in range(2):
+                await page.evaluate("window.scrollBy(0, 500)")
+                await asyncio.sleep(1)
+
+            # Extract mentions from the page
+            # Note: username is not used for mentions, we extract from tweet
+            mentions = await self._extract_tweets_from_page(page, count, "")
+
+            logger.info(f"Successfully extracted {len(mentions)} mentions")
+            return mentions
+
+        except PlaywrightTimeoutError as e:
+            logger.error(f"Timeout loading mentions: {e}")
+            raise TwitterRepositoryError(
+                "Timeout loading mentions",
+                error_code="TIMEOUT"
+            )
+        except Exception as e:
+            logger.error(f"Error reading mentions: {e}")
+            raise TwitterRepositoryError(
+                f"Failed to read mentions: {str(e)}",
+                error_code="READ_FAILED"
+            )
+
     async def _extract_tweets_from_page(self, page: Page, count: int, username: str) -> List[Tweet]:
         """
         Extract tweet data from the loaded page.
@@ -318,9 +380,10 @@ class PlaywrightTwitterRepository(ITwitterRepository):
                         # Clean up the text (remove timestamps, etc.)
                         text = text.split('\n')[0] if text else ""
 
-                    # Extract tweet link to get ID
+                    # Extract tweet link to get ID and author
                     # Links in tweets have format /username/status/TWEET_ID
                     tweet_id = ""
+                    tweet_username = username  # Use provided username or extract
                     href = ""
 
                     # Try to find the status link
@@ -329,27 +392,33 @@ class PlaywrightTwitterRepository(ITwitterRepository):
                     for link in link_elements:
                         href = await link.get_attribute("href")
                         if href:
-                            match = re.search(r'/status/(\d+)', href)
+                            # Extract both username and tweet ID from URL
+                            match = re.search(r'/([^/]+)/status/(\d+)', href)
                             if match:
-                                tweet_id = match.group(1)
+                                extracted_username = match.group(1)
+                                tweet_id = match.group(2)
+
+                                # Use extracted username if none was provided
+                                if not username:
+                                    tweet_username = extracted_username
                                 break
 
                     # Log what we found
-                    logger.debug(f"Tweet {i}: text_length={len(text)}, id={tweet_id}, href={href}")
+                    logger.debug(f"Tweet {i}: text_length={len(text)}, id={tweet_id}, username={tweet_username}, href={href}")
 
                     # Only add tweet if we have both text and ID
-                    if text and tweet_id:
+                    if text and tweet_id and tweet_username:
                         tweet = Tweet(
                             id=tweet_id,
                             text=text.strip(),
-                            author_username=username,
-                            url=f"{config.TWITTER_BASE_URL}/{username}/status/{tweet_id}",
+                            author_username=tweet_username,
+                            url=f"{config.TWITTER_BASE_URL}/{tweet_username}/status/{tweet_id}",
                             created_at=datetime.now()  # Placeholder - would need proper parsing
                         )
                         tweets.append(tweet)
-                        logger.info(f"Extracted tweet {tweet_id}: {text[:80]}...")
+                        logger.info(f"Extracted tweet {tweet_id} from @{tweet_username}: {text[:80]}...")
                     else:
-                        logger.warning(f"Tweet {i}: Skipping - missing text={not text} or id={not tweet_id}")
+                        logger.warning(f"Tweet {i}: Skipping - missing text={not text} or id={not tweet_id} or username={not tweet_username}")
 
                 except Exception as e:
                     logger.warning(f"Failed to extract tweet {i}: {e}", exc_info=True)
